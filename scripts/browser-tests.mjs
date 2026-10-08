@@ -287,6 +287,31 @@ async function main() {
     record('landscape console stays clean', landErrors.length === 0, landErrors.slice(0, 3).join(' | '));
     await land.close();
 
+    // ------------------------------------------------- crafted invite link
+    // A query-supplied endpoint must not be able to aim the socket, and the stored
+    // reconnect token that travels with it, at a host the player never chose.
+    const originErrors = [];
+    const hostile = await newPage(browser, originErrors, { width: 1200, height: 800, deviceScaleFactor: 1 });
+    await hostile.goto(`${BASE}/?server=wss%3A%2F%2Fevil.example%2Fsteal`, { waitUntil: 'domcontentloaded' });
+    await hostile.waitForFunction(() => Boolean(window.__RP), { timeout: 15000 });
+    await sleep(900);
+    await hostile.evaluate(() => window.__RP.openLink(null));
+    const hostileCode = await (async () => {
+      const deadline = Date.now() + 12000;
+      while (Date.now() < deadline) {
+        const code = await hostile.evaluate(() => window.__RP.inviteCode());
+        if (code) return code;
+        await sleep(150);
+      }
+      return null;
+    })();
+    record(
+      'link: a crafted ?server= cannot redirect the socket off-origin',
+      Boolean(hostileCode) && hostileCode.length === 6 && originErrors.length === 0,
+      JSON.stringify({ code: hostileCode, errors: originErrors.slice(0, 3) })
+    );
+    await hostile.close();
+
     // ---------------------------------------------------------------- LINK
     const linkErrors = [];
     const host = await newPage(browser, linkErrors, { width: 1440, height: 900, deviceScaleFactor: 2 });

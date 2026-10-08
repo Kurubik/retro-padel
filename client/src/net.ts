@@ -26,14 +26,14 @@ export class LinkClient {
   seq = 0;
   status: LinkStatus = 'idle';
 
+  /**
+   * The endpoint is always same-origin. It is never taken from the query string:
+   * an invite link must not be able to aim the socket (and the stored reconnect
+   * token that travels with it) at a host the player never chose.
+   */
   constructor(url?: string) {
-    if (url) {
-      this.url = url;
-    } else {
-      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const override = new URLSearchParams(location.search).get('server');
-      this.url = override ? override : `${proto}//${location.host}/ws`;
-    }
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    this.url = url ?? `${proto}//${location.host}/ws`;
   }
 
   setHandlers(handlers: LinkHandlers): void {

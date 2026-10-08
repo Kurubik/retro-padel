@@ -18,9 +18,9 @@ npm run test:browser              # headless Chrome acceptance run (writes artif
 | Gate | Result |
 | --- | --- |
 | `tsc --noEmit` (strict) | clean |
-| Vitest | **58 / 58 passing** across 7 files |
+| Vitest | **68 / 68 passing** across 8 files |
 | Production build | client `dist/` + server `dist-server/index.js` |
-| Browser acceptance | **27 / 27 checks passing** |
+| Browser acceptance | **28 / 28 checks passing** |
 
 ### Unit, protocol and HTTP coverage (`tests/`)
 
@@ -42,7 +42,14 @@ npm run test:browser              # headless Chrome acceptance run (writes artif
   rather than dropped, banked time is discarded while frozen and clamped so a stalled loop cannot
   fast-forward a rally, an active match is never expired by the idle sweep, an abandoned room still is,
   an automatic pause lifts on reclaim while a deliberate pause survives it, and a tab-away pause is
-  reported as automatic.
+  reported as automatic. Also covered: an idle one-player lobby still expires even though the server
+  timer keeps calling `advance`, an unstarted two-player lobby is not swept, a started match freezes
+  while a seat is missing in countdown and point phases alike, a finished match is not marked paused,
+  and a reclaim token is accepted right up to its deadline, rejected at and after it, with the seat
+  still released by the sweep.
+- **Online endpoint origin** (`tests/unit/link-origin.test.ts`) — the WebSocket endpoint is always
+  same-origin; a `?server=` query value is ignored so an invite link cannot aim the socket, and the
+  stored reconnect token that travels with it, at a host the player never chose.
 - **Public HTTP surface** (`tests/integration/http.test.ts`) — this suite spawns the **built production
   bundle** (`dist-server/index.js`) on an ephemeral port and drives it over real sockets: health and the
   SPA shell, a malformed percent escape answered with 400 while `/healthz` keeps working afterwards,
@@ -68,7 +75,9 @@ Driven with headless Chrome against the built server:
     reconnect token.
 12. **LINK reconnect** — a live rally is dropped mid-play, the seat reclaims, and both clients return to
     a running rally on the `playing` screen without anyone pressing resume.
-13. No console errors on any page.
+13. **Crafted invite link** — loading `/?server=wss://evil.example/steal` still reaches this server and
+    creates a real room, proving the socket is not redirectable off-origin.
+14. No console errors on any page.
 
 ## Screenshots
 
@@ -85,6 +94,14 @@ the same page renders clean at scale factor 2, and a clipped capture of the cons
 factor 1 is clean as well. The first version of the CRT overlay did use `mix-blend-mode`, which
 produced a similar ghosting from a genuine cause; that was replaced with deterministic alpha
 compositing before this run.
+
+## Content Security Policy
+
+`connect-src` is `'self'`: only same-origin sockets are permitted, so a compromised script cannot
+exfiltrate the reconnect token to an arbitrary host. The browser acceptance run exercises the full
+LINK flow (create, join, play, reconnect) through the real served page and its real CSP header, which
+demonstrates same-origin WebSockets are allowed. Very old WebKit builds were historically strict about
+matching `ws:`/`wss:` under `'self'`; that path is not exercised here.
 
 ## Known, intentional behaviour
 

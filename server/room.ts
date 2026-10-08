@@ -98,6 +98,10 @@ export class Room {
     if (token !== null) {
       for (const side of [0, 1] as const) {
         if (!this.connected[side] && this.tokens[side] === token) {
+          // The grace window is checked here rather than relied on from the sweep:
+          // the sweep runs on its own cadence, so a stale token must fail on its own.
+          const until = this.reclaimUntil[side];
+          if (until !== null && now >= until) return null;
           this.connected[side] = true;
           this.reclaimUntil[side] = null;
           this.lastActivity = now;
@@ -135,9 +139,12 @@ export class Room {
     this.connected[side] = false;
     this.reclaimUntil[side] = this.clock.now() + RECONNECT_GRACE_MS;
     this.inputs[side] = { dir: 0, target: null };
-    // Only an *unrequested* freeze is marked automatic; a match a player already
-    // paused by hand must not become auto-resumable because someone dropped.
-    if (this.match.phase === 'rally' && !this.paused) {
+    // A started, unfinished match freezes whenever a seat goes missing, not just
+    // mid-rally: the countdown and point timers would otherwise keep draining while
+    // nobody is there to play them. Only an *unrequested* freeze is marked automatic,
+    // so a match a player paused by hand stays theirs to lift.
+    const live = this.started && this.match.phase !== 'game-over' && this.match.phase !== 'lobby';
+    if (live && !this.paused) {
       this.paused = true;
       this.pausedAutomatically = true;
     }
@@ -203,7 +210,8 @@ export class Room {
   advance(elapsed: number): { events: RoomEvent[]; snapshots: boolean } {
     const events: RoomEvent[] = [];
     if (!this.bothConnected && !this.started) {
-      this.lastActivity = this.clock.now();
+      // Idle wait for an opponent. The timer calling us is not player activity, so
+      // the room keeps ageing and an unused lobby still expires on the idle bound.
       this.accumulator = 0;
       return { events, snapshots: false };
     }
@@ -246,7 +254,7 @@ export class Room {
 
   snapshot(at: number): WireSnapshot {
     const m = this.match;
-    const phase = this.paused && m.phase === 'rally' ? 'paused' : m.phase;
+    const phase = this.paused && m.phase !== 'game-over' && m.phase !== 'lobby' ? 'paused' : m.phase;
     return {
       tick: this.tick,
       at,
