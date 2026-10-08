@@ -1,0 +1,35 @@
+{
+  "name": "retro-padel",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "RETRO//PADEL — a cyberpunk handheld paddle duel. Solo, local and private online 1v1.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "vite build && vite build --config vite.server.config.ts",
+    "start": "node dist-server/index.js",
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit",
+    "test:protocol": "vitest run tests/protocol",
+    "test:browser": "node scripts/browser-tests.mjs",
+    "test:all": "npm run typecheck && npm run test && npm run build"
+  },
+  "dependencies": {
+    "@fontsource/chakra-petch": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "@types/ws": "^8.18.2",
+    "puppeteer-core": "^25.12.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.3",
+    "vitest": "^5.0.3"
+  }
+}

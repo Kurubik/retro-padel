@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+    <meta name="theme-color" content="#080910" />
+    <meta name="color-scheme" content="dark" />
+    <title>RETRO//PADEL — SIGNAL/09 handheld</title>
+    <meta name="description" content="RETRO//PADEL: a cyberpunk handheld paddle duel. Solo vs three CPU tiers, local two-player, and private online 1v1 by invite link." />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+  </head>
+  <body>
+    <noscript>RETRO//PADEL needs JavaScript to run the console.</noscript>
+    <div id="app" class="stage">
+      <div class="stage__bg" aria-hidden="true"></div>
+      <div id="boot" class="boot" aria-hidden="true">
+        <span class="boot__mark">RETRO<span class="slash">//</span>PADEL</span>
+        <span class="boot__sub">SIGNAL/09 handheld — powering on</span>
+      </div>
+      <main id="stage-inner" class="stage__inner"></main>
+      <p id="stage-note" class="stage__note" role="status" aria-live="polite"></p>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
