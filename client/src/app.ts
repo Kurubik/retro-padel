@@ -789,7 +789,8 @@ export class App {
         suddenDeath: latest?.suddenDeath ?? false,
         reducedMotion,
         showScore: !ambient,
-        localSplit: false
+        localSplit: false,
+        scoreLabels: this.scoreLabels()
       };
     }
 
@@ -807,7 +808,8 @@ export class App {
         suddenDeath: this.match.suddenDeath,
         reducedMotion,
         showScore: true,
-        localSplit: this.mode === 'local' && this.screen === 'playing'
+        localSplit: this.mode === 'local' && this.screen === 'playing',
+        scoreLabels: this.scoreLabels()
       };
     }
 
@@ -824,8 +826,20 @@ export class App {
       reducedMotion,
       // The demo rally only carries its own score readout on the attract screen.
       showScore: this.screen === 'attract',
-      localSplit: false
+      localSplit: false,
+      scoreLabels: this.scoreLabels()
     };
+  }
+
+  /**
+   * Score readout labels in field order (side 0 first). Online the readout has to
+   * match who is really on each side: the guest's paddle sits on the right, so a
+   * hardcoded "YOU" on the left would point at the opponent.
+   */
+  private scoreLabels(): [string, string] {
+    if (this.mode === 'solo') return ['YOU', 'CPU'];
+    if (this.mode === 'local') return ['P1', 'P2'];
+    return this.session?.side === 1 ? ['FRIEND', 'YOU'] : ['YOU', 'FRIEND'];
   }
 
   private shake(): void {
@@ -1247,6 +1261,7 @@ export class App {
       match: () => this.match,
       session: () => this.session,
       linkState: () => this.session?.buffer.at(-1)?.snap ?? null,
+      scoreLabels: () => this.scoreLabels(),
       inviteCode: () => this.session?.code ?? null,
       screenName: () => this.screen,
       setHeadless: (value: boolean) => {

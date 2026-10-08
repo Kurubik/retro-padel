@@ -7,11 +7,17 @@ the real Node server, not against a mocked environment. No deployment was perfor
 
 ```bash
 npm ci
-npm run typecheck                 # strict TypeScript, whole repository
-npm test                          # 35 unit + protocol tests
-npm run build                     # client bundle + Node server bundle
+npm run test:all                  # typecheck + the full unit, protocol and HTTP suite
 npm run test:browser              # headless Chrome acceptance run (writes artifacts/screenshots)
 ```
+
+`npm test` builds both bundles first through its `pretest` hook, so the HTTP integration suite —
+which serves the real `dist/` SPA shell — passes from a clean checkout with no pre-existing build.
+`npm run test:all` is `typecheck && test`, so it does not build twice. Invoking the integration
+suite directly also works: it rebuilds only whichever bundle is missing or older than its sources.
+
+This was proven in a fresh workspace with no `dist/`, no `dist-server/` and no `node_modules`:
+`npm ci && npm test` returned 68 / 68, and `npm run test:all` exited 0.
 
 ## Automated results
 
@@ -20,7 +26,7 @@ npm run test:browser              # headless Chrome acceptance run (writes artif
 | `tsc --noEmit` (strict) | clean |
 | Vitest | **68 / 68 passing** across 8 files |
 | Production build | client `dist/` + server `dist-server/index.js` |
-| Browser acceptance | **28 / 28 checks passing** |
+| Browser acceptance | **32 / 32 checks passing** |
 
 ### Unit, protocol and HTTP coverage (`tests/`)
 
@@ -63,25 +69,30 @@ Driven with headless Chrome against the built server:
 1. `/healthz` responds.
 2. Attract shows `PRESS START`; mode select lists solo, local, link, how-to and settings.
 3. Settings exposes sound, motion and contrast.
-4. **Solo** — a rally played with real keyboard events scores a point (observed up to 24 paddle hits).
+4. **Solo** — a rally played with real keyboard events scores a point (observed up to 24 paddle hits);
+   the score readout reads `YOU` / `CPU`.
 5. **Game over** — winner plate and rematch control render.
 6. **Pause** — resume / settings / quit render.
-7. **Local 2P** — `W` moves P1 to the top and `↓` moves P2 to the bottom independently.
+7. **Local 2P** — `W` moves P1 to the top and `↓` moves P2 to the bottom independently; the score
+   readout reads `P1` / `P2`.
 8. **Touch** — a touch drag on a 390×844 viewport moves the paddle.
-9. **320×640** — no horizontal overflow, and every control is ≥ 44 CSS px in both axes.
+9. **320×640** — no horizontal overflow, and every control is ≥ 44 CSS px in both axes; the external
+   hint row is suppressed so it cannot overlap the console, while the on-shell legends stay readable.
 10. **844×390 landscape** — screen and D-pad remain inside the viewport with no page scroll.
 11. **LINK** — two separate browser contexts join one room over a real WebSocket, play, and score a
     point; both clients agree on the score; a page refresh reclaims the same seat using the stored
     reconnect token.
 12. **LINK reconnect** — a live rally is dropped mid-play, the seat reclaims, and both clients return to
     a running rally on the `playing` screen without anyone pressing resume.
+12b. **LINK labels** — the host reads `YOU` / `FRIEND` and the guest reads `FRIEND` / `YOU`, so each
+    player sees their own side labelled correctly rather than a hardcoded left-hand `YOU`.
 13. **Crafted invite link** — loading `/?server=wss://evil.example/steal` still reaches this server and
     creates a real room, proving the socket is not redirectable off-origin.
 14. No console errors on any page.
 
 ## Screenshots
 
-`artifacts/screenshots/` — 22 images at 1440×900, 390×844, 320×640 and 844×390 covering attract,
+`artifacts/screenshots/` — 23 images at 1440×900, 390×844, 320×640 and 844×390 covering attract,
 mode select, settings, how-to, solo rally, local rally, pause, winner, link lobby (host and both
 players), live link match and reconnect.
 
@@ -94,6 +105,9 @@ the same page renders clean at scale factor 2, and a clipped capture of the cons
 factor 1 is clean as well. The first version of the CRT overlay did use `mix-blend-mode`, which
 produced a similar ghosting from a genuine cause; that was replaced with deterministic alpha
 compositing before this run.
+
+Captures also wait for the power-on overlay to reach computed `visibility: hidden` and `opacity: 0`
+rather than sleeping a fixed duration, so no committed screenshot is a transitional frame of the fade.
 
 ## Content Security Policy
 

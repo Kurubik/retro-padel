@@ -9,24 +9,41 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)), '..', '..');
 const ENTRY = join(ROOT, 'dist-server', 'index.js');
+const SHELL = join(ROOT, 'dist', 'index.html');
 const STATIC_DIR = join(ROOT, 'dist');
 
-/** Newest mtime under a directory, for .ts sources only. */
-function newestSourceMtime(dir: string): number {
+/** Newest mtime of any file at or under a path. */
+function newestMtime(target: string): number {
+  if (!existsSync(target)) return 0;
+  if (statSync(target).isFile()) return statSync(target).mtimeMs;
   let newest = 0;
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) newest = Math.max(newest, newestSourceMtime(path));
-    else if (entry.name.endsWith('.ts')) newest = Math.max(newest, statSync(path).mtimeMs);
+  for (const entry of readdirSync(target, { withFileTypes: true })) {
+    newest = Math.max(newest, newestMtime(join(target, entry.name)));
   }
   return newest;
 }
 
-/** The regression is about the real bundle, so make sure we spawn a current one. */
-function ensureServerBundle(): void {
-  const sources = Math.max(newestSourceMtime(join(ROOT, 'server')), newestSourceMtime(join(ROOT, 'shared')));
-  const built = existsSync(ENTRY) ? statSync(ENTRY).mtimeMs : 0;
-  if (built < sources) {
+/**
+ * This suite exercises the two real bundles, including the built SPA shell, so it
+ * makes sure both exist and are not older than their sources. `npm test` already
+ * builds them up front (via pretest), so in the documented flow this is a no-op; it
+ * matters when the suite is invoked directly against a stale or absent build.
+ */
+function ensureBuild(): void {
+  const clientSources = Math.max(
+    newestMtime(join(ROOT, 'client')),
+    newestMtime(join(ROOT, 'shared')),
+    newestMtime(join(ROOT, 'vite.config.ts'))
+  );
+  if (newestMtime(SHELL) < clientSources) {
+    execFileSync('npm', ['run', 'build:client'], { cwd: ROOT, stdio: 'pipe' });
+  }
+  const serverSources = Math.max(
+    newestMtime(join(ROOT, 'server')),
+    newestMtime(join(ROOT, 'shared')),
+    newestMtime(join(ROOT, 'vite.server.config.ts'))
+  );
+  if (newestMtime(ENTRY) < serverSources) {
     execFileSync('npm', ['run', 'build:server'], { cwd: ROOT, stdio: 'pipe' });
   }
 }
@@ -68,7 +85,7 @@ async function rawSocket(payload: string): Promise<string> {
 }
 
 beforeAll(async () => {
-  ensureServerBundle();
+  ensureBuild();
   child = spawn(process.execPath, [ENTRY], {
     cwd: ROOT,
     env: { ...process.env, HOST: '127.0.0.1', PORT: '0', STATIC_DIR },

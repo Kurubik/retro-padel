@@ -18,6 +18,8 @@ export interface RenderView {
   showScore: boolean;
   /** Which sides are live and controllable, for touch-zone hints. */
   localSplit: boolean;
+  /** Score readout labels in field order (side 0 first), so who is who is correct. */
+  scoreLabels: [string, string];
 }
 
 interface Ping {
@@ -263,8 +265,8 @@ export class FieldRenderer {
     ctx.fillText(':', FIELD_W / 2, y - 4);
     ctx.font = '600 28px "Chakra Petch", sans-serif';
     ctx.globalAlpha *= view.ambient ? 0.4 : 1.2;
-    ctx.fillText('YOU', FIELD_W / 2 - 118, y + 74);
-    ctx.fillText(view.localSplit ? 'P2' : 'CPU', FIELD_W / 2 + 118, y + 74);
+    ctx.fillText(view.scoreLabels[0], FIELD_W / 2 - 118, y + 74);
+    ctx.fillText(view.scoreLabels[1], FIELD_W / 2 + 118, y + 74);
     // Serve marker.
     if (view.servePulse > 0.02) {
       ctx.globalAlpha *= view.servePulse * 0.9;

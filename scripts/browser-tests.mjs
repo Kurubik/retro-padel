@@ -70,7 +70,18 @@ async function newPage(browser, bucket, viewport) {
 async function bootApp(page) {
   await page.goto(BASE, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => Boolean(window.__RP), { timeout: 15000 });
-  await sleep(900); // power-on sweep
+  // The power-on overlay starts fading at 880 ms and takes 420 ms. Wait for it to be
+  // genuinely hidden instead of guessing a duration, so every capture is a stable
+  // frame rather than a transitional one.
+  await page.waitForFunction(
+    () => {
+      const boot = document.getElementById('boot');
+      if (!boot) return true;
+      const style = getComputedStyle(boot);
+      return style.visibility === 'hidden' && Number(style.opacity) === 0;
+    },
+    { timeout: 15000 }
+  );
 }
 
 const mobile = { width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
@@ -140,6 +151,8 @@ async function main() {
     record('solo: real keyboard rally scores a point', solo.ok, solo.detail);
     const soloShots = await page.evaluate(() => window.__RP.screenName());
     record('solo: match screen active', soloShots === 'playing' || soloShots === 'over', soloShots);
+    const soloLabels = await page.evaluate(() => window.__RP.scoreLabels());
+    record('solo: score labels read YOU / CPU', JSON.stringify(soloLabels) === JSON.stringify(['YOU', 'CPU']), JSON.stringify(soloLabels));
     await shot(page, '1440x900-solo-rally');
 
     // ---- finished winner state -------------------------------------------
@@ -190,6 +203,8 @@ async function main() {
     const p1Moved = Math.abs(during.p1 - before.p1) > 40;
     const opposite = Math.sign(during.p0 - before.p0) !== Math.sign(during.p1 - before.p1);
     record('local 2P: both paddles move independently', p0Moved && p1Moved && opposite, JSON.stringify({ before, during }));
+    const localLabels = await page.evaluate(() => window.__RP.scoreLabels());
+    record('local 2P: score labels read P1 / P2', JSON.stringify(localLabels) === JSON.stringify(['P1', 'P2']), JSON.stringify(localLabels));
     await shot(page, '1440x900-local-rally');
 
     await page.evaluate(() => window.__RP.setScreen('attract'));
@@ -257,6 +272,29 @@ async function main() {
     });
     record('320x640: console fits width without horizontal overflow', overflow.docWidth <= overflow.viewport + 1, JSON.stringify(overflow));
     record('320x640: touch targets are at least 44 CSS px', overflow.minTarget >= 44, `min=${overflow.minTarget.toFixed(1)}`);
+    const noteCheck = await small.evaluate(() => {
+      const note = document.querySelector('.stage__note');
+      const shell = document.querySelector('.console');
+      if (!note || !shell) return { present: Boolean(note), overlaps: false, hidden: true };
+      const style = getComputedStyle(note);
+      const hidden = style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0;
+      if (hidden) return { present: true, hidden: true, overlaps: false };
+      const n = note.getBoundingClientRect();
+      const c = shell.getBoundingClientRect();
+      const overlaps = !(n.bottom <= c.top || n.top >= c.bottom || n.right <= c.left || n.left >= c.right);
+      return {
+        present: true,
+        hidden: false,
+        overlaps,
+        note: { top: Math.round(n.top), bottom: Math.round(n.bottom) },
+        shell: { top: Math.round(c.top), bottom: Math.round(c.bottom) }
+      };
+    });
+    record(
+      '320x640: external hint row does not overlap the console',
+      noteCheck.hidden === true || noteCheck.overlaps === false,
+      JSON.stringify(noteCheck)
+    );
     await shot(small, '320x640-attract');
     await small.evaluate(() => window.__RP.openModes());
     await sleep(260);
@@ -346,6 +384,15 @@ async function main() {
     const hostScore = await host.evaluate(() => window.__RP.linkState()?.score ?? null);
     const guestScore = await guest.evaluate(() => window.__RP.linkState()?.score ?? null);
     record('link: both clients agree on the score', JSON.stringify(hostScore) === JSON.stringify(guestScore), JSON.stringify({ hostScore, guestScore }));
+    const hostLabels = await host.evaluate(() => window.__RP.scoreLabels());
+    const guestLabels = await guest.evaluate(() => window.__RP.scoreLabels());
+    record(
+      'link: score labels are side-correct for host and guest',
+      JSON.stringify(hostLabels) === JSON.stringify(['YOU', 'FRIEND']) &&
+        JSON.stringify(guestLabels) === JSON.stringify(['FRIEND', 'YOU']),
+      JSON.stringify({ hostLabels, guestLabels })
+    );
+    await shot(guest, '1440x900-link-guest');
     await shot(host, '1440x900-link-match');
 
     // A dropped seat auto-pauses the rally, so a reclaim has to lift that freeze on

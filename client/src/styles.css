@@ -962,6 +962,13 @@
     .stage__note { display: none; }
   }
 
+  /* Phones and short windows: this external hint row would sit on top of the
+     console, and the shell already carries its own control legends, so it is
+     dropped rather than allowed to overlap the device. */
+  @media (max-width: 640px), (max-height: 720px) {
+    .stage__note { display: none; }
+  }
+
   @media (max-width: 380px) {
     .console { padding: 12px 12px 10px; border-radius: 34px; }
     .bezel { padding: 8px; }
