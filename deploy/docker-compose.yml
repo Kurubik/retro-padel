@@ -1,10 +1,15 @@
-# RETRO//PADEL — compose fragment for the existing edge network.
+# RETRO//PADEL — compose definition for the existing edge network.
 #
 # Authored for review. NOT applied by the implementation agent: switching the
 # padel.xtr.sh upstream is a separate, reviewed cutover step (see deploy/README.md).
 #
-# The service joins the shared external network under its own unique name so it can
-# never collide with, or restart, the existing PADEL//CLUB container.
+# `name:` pins a deliberately unique Compose project. The old PADEL//CLUB stack also
+# lives in a directory called deploy/, so without this the resolved project name here
+# defaults to "deploy" as well, and a plain `up` in this repository could treat the
+# running old service as an orphan of this project. Release commands should pass
+# `-p retro-padel` explicitly as well.
+
+name: retro-padel
 
 services:
   retro-padel:
@@ -26,7 +31,11 @@ services:
       HOST: 0.0.0.0
       MAX_ROOMS: "200"
     networks:
-      - girl_edge
+      girl_edge:
+        # Stable network name for the reviewed Caddy upstream, independent of both
+        # the container name and the Compose project name.
+        aliases:
+          - retro-padel-app
     # No published ports: the shared edge reaches it by network alias only.
     expose:
       - "8080"

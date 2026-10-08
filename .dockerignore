@@ -1,0 +1,38 @@
+# Build context for the production image (deploy/Dockerfile).
+#
+# The Dockerfile copies exactly these paths, so none of them may be excluded:
+#   package.json  package-lock.json
+#   tsconfig.json  vite.config.ts  vite.server.config.ts
+#   client/  shared/  server/
+#
+# Everything listed below is either installed or rebuilt inside the image, or is
+# review evidence that has no business in a runtime artifact.
+
+# version control metadata
+.git
+.gitignore
+
+# dependencies and build output: restored by `npm ci`, rebuilt by `npm run build`
+node_modules
+dist
+dist-server
+coverage
+
+# review evidence (screenshots, reports)
+artifacts
+
+# debug and temporary leftovers
+*.log
+*.tmp
+*.bak
+*.orig
+*.rej
+*.swp
+.DS_Store
+tmp
+
+# local secrets and per-developer configuration
+.env
+.env.*
+*.pem
+*.key

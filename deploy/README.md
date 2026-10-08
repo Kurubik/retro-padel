@@ -5,6 +5,31 @@
 > the reviewer. Nothing here touches the existing `Kurubik/padel` repository, its container, the
 > shared Caddy config, DNS or any other service.
 
+## Compose identity (why the project name is pinned)
+
+This repository's Compose file lives in a directory called `deploy/`, exactly like the old
+`Kurubik/padel` stack. Compose derives its default project name from that directory, so without a pin
+both stacks resolve to the project name `deploy` — and a plain `up` here could treat the running old
+`padel` service as an orphan of this project.
+
+`deploy/docker-compose.yml` therefore sets `name: retro-padel`, and release commands should pass the
+project explicitly as well:
+
+```bash
+docker compose -p retro-padel -f deploy/docker-compose.yml config
+docker compose -p retro-padel -f deploy/docker-compose.yml up -d
+```
+
+The service also attaches to the shared external network under the explicit alias
+`retro-padel-app`. Use that alias — not the container name — as the Caddy upstream, so the route
+resolves independently of container or project naming.
+
+## Build context
+
+`.dockerignore` keeps the context to what the Dockerfile actually copies (`package.json`,
+`package-lock.json`, `tsconfig.json`, `vite.config.ts`, `vite.server.config.ts`, `client/`, `shared/`,
+`server/`). Measured on this tree: 4183 files / 207.7 MB unfiltered versus 45 files / 316.3 kB sent.
+
 ## 1. Build and smoke the image under a new identity
 
 ```bash
@@ -39,7 +64,7 @@ Record, so a rollback is exact rather than approximate:
 ## 3. Shared-config validation, then a single upstream swap
 
 1. Write the candidate config and run `caddy validate --config <file>` **before** reloading.
-2. Change only the `padel.xtr.sh` upstream: a `reverse_proxy` to the new network alias. WebSocket
+2. Change only the `padel.xtr.sh` upstream: a `reverse_proxy` to the network alias `retro-padel-app`. WebSocket
    upgrade must pass through (Caddy's `reverse_proxy` does this transparently — do not add a separate
    `/ws` matcher that strips upgrade headers).
 3. Restart **only Caddy** — never the whole edge, and never the old app container.
