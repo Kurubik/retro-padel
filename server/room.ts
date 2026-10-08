@@ -31,6 +31,19 @@ export interface RoomClock {
   now(): number;
 }
 
+export interface SeatClaim {
+  side: Side;
+  token: string;
+  /** True when this claim restored both seats and lifted an automatic pause. */
+  resumed: boolean;
+}
+
+/**
+ * Upper bound on simulation steps consumed by a single advance call. A stalled or
+ * bursty event loop must not be able to fast-forward a live rally.
+ */
+const MAX_STEPS_PER_CALL = 6;
+
 export class Room {
   readonly code: string;
   readonly match: MatchState;
@@ -46,9 +59,16 @@ export class Room {
   readonly reclaimUntil: [number | null, number | null] = [null, null];
   readonly rematchVotes = new Set<Side>();
   paused = false;
+  /**
+   * True while the freeze was not requested by a player (a seat dropped, or a client
+   * reported its tab went away). Only this kind of pause lifts itself.
+   */
+  pausedAutomatically = false;
   tick = 0;
   lastActivity: number;
   started = false;
+  /** Retained sub-step remainder so 16 ms callbacks still tick at 60 Hz. */
+  private accumulator = 0;
   private readonly clock: RoomClock;
 
   constructor(code: string, clock: RoomClock, seed: number) {
@@ -73,7 +93,7 @@ export class Room {
   }
 
   /** Seat a fresh connection, reusing the first free seat or the reclaimable one. */
-  claimSeat(token: string | null): { side: Side; token: string } | null {
+  claimSeat(token: string | null): SeatClaim | null {
     const now = this.clock.now();
     if (token !== null) {
       for (const side of [0, 1] as const) {
@@ -81,7 +101,7 @@ export class Room {
           this.connected[side] = true;
           this.reclaimUntil[side] = null;
           this.lastActivity = now;
-          return { side, token };
+          return { side, token, resumed: this.liftAutomaticPause() };
         }
       }
       return null;
@@ -93,17 +113,34 @@ export class Room {
         this.connected[side] = true;
         this.reclaimUntil[side] = null;
         this.lastActivity = now;
-        return { side, token: fresh };
+        return { side, token: fresh, resumed: this.liftAutomaticPause() };
       }
     }
     return null;
+  }
+
+  /**
+   * A dropped seat freezes the rally so nobody loses a point to the network. Once
+   * both players are back the freeze has to lift on its own; a pause a player asked
+   * for deliberately must survive a reconnect.
+   */
+  private liftAutomaticPause(): boolean {
+    if (!this.pausedAutomatically || !this.bothConnected) return false;
+    this.paused = false;
+    this.pausedAutomatically = false;
+    return true;
   }
 
   disconnect(side: Side): void {
     this.connected[side] = false;
     this.reclaimUntil[side] = this.clock.now() + RECONNECT_GRACE_MS;
     this.inputs[side] = { dir: 0, target: null };
-    if (this.match.phase === 'rally') this.paused = true;
+    // Only an *unrequested* freeze is marked automatic; a match a player already
+    // paused by hand must not become auto-resumable because someone dropped.
+    if (this.match.phase === 'rally' && !this.paused) {
+      this.paused = true;
+      this.pausedAutomatically = true;
+    }
     this.lastActivity = this.clock.now();
   }
 
@@ -146,28 +183,44 @@ export class Room {
     return false;
   }
 
-  setPaused(value: boolean, side: Side): boolean {
+  /** Pause or resume. `automatic` marks a freeze nobody asked for, which self-lifts. */
+  setPaused(value: boolean, side: Side, automatic = false): boolean {
     if (this.match.phase === 'game-over' || this.match.phase === 'lobby') return false;
-    if (value === this.paused) return false;
+    // An explicit request outranks an automatic freeze, so a player who pauses (or
+    // resumes) by hand is never overruled by a later reconnect.
+    if (value === this.paused && !this.pausedAutomatically) return false;
     this.paused = value;
+    this.pausedAutomatically = value && automatic;
     this.inputs[side] = { dir: 0, target: null };
     return true;
   }
 
-  /** Advance at most `elapsed` seconds of simulation in fixed steps. */
+  /**
+   * Advance the world in fixed STEP slices, retaining the sub-step remainder.
+   * Interval callbacks arrive at whatever cadence the event loop manages (16 ms is
+   * typical), so discarding the fraction would silently lose whole seconds of play.
+   */
   advance(elapsed: number): { events: RoomEvent[]; snapshots: boolean } {
     const events: RoomEvent[] = [];
     if (!this.bothConnected && !this.started) {
       this.lastActivity = this.clock.now();
+      this.accumulator = 0;
       return { events, snapshots: false };
     }
     if (this.paused) {
-      // Keep the clock honest but freeze the world.
-      this.match.elapsed += 0;
+      // Frozen: discard elapsed time rather than bank it for a catch-up burst.
+      this.accumulator = 0;
       return { events, snapshots: false };
     }
-    const steps = Math.min(Math.floor(elapsed / STEP), 6);
-    for (let i = 0; i < steps; i++) {
+    if (Number.isFinite(elapsed) && elapsed > 0) this.accumulator += elapsed;
+    const maxBanked = STEP * MAX_STEPS_PER_CALL;
+    if (this.accumulator > maxBanked) this.accumulator = maxBanked;
+
+    const before = this.tick;
+    let steps = 0;
+    while (this.accumulator >= STEP && steps < MAX_STEPS_PER_CALL) {
+      this.accumulator -= STEP;
+      steps++;
       this.tick++;
       const simEvents = stepMatch(this.match, { inputs: this.inputs, serveGate: true });
       this.inputs[0].serve = false;
@@ -178,7 +231,10 @@ export class Room {
       }
       if (this.match.phase === 'game-over') break;
     }
-    const snapshots = this.tick % SNAPSHOT_EVERY === 0;
+    // Snapshots ride the target cadence: emit once per boundary actually crossed,
+    // and never on a call that stepped nothing (a repeated tick would re-fire).
+    const snapshots =
+      steps > 0 && Math.floor(this.tick / SNAPSHOT_EVERY) > Math.floor(before / SNAPSHOT_EVERY);
     return { events, snapshots };
   }
 
@@ -277,11 +333,13 @@ export class RoomManager {
     const now = this.clock.now();
     const removed: string[] = [];
     for (const [code, room] of this.rooms) {
-      for (const side of room.expireSeats()) {
-        void side;
-      }
-      const idle = now - room.lastActivity > this.idleMs;
+      room.expireSeats();
+      // A room with both players present is a live match, not an idle one: no
+      // wall-clock silence may delete it out from under them. Abandoned lobbies and
+      // rooms holding a disconnected seat still expire on the idle bound.
+      if (room.bothConnected) continue;
       const abandoned = room.empty && room.bothReadyToReclaim();
+      const idle = now - room.lastActivity > this.idleMs;
       if (abandoned || idle) {
         this.rooms.delete(code);
         removed.push(code);

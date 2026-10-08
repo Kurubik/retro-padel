@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { createReadStream, existsSync, statSync } from 'node:fs';
-import { extname, join, normalize, resolve } from 'node:path';
+import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AddressInfo } from 'node:net';
 import { WebSocketServer, type WebSocket } from 'ws';
@@ -61,11 +61,46 @@ const SECURITY_HEADERS: Record<string, string> = {
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src 'self' ws: wss:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 };
 
+function badRequest(res: http.ServerResponse, message = 'bad request'): void {
+  if (res.headersSent) {
+    res.destroy();
+    return;
+  }
+  res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' }).end(message);
+}
+
+/**
+ * Both halves of request-target handling can throw on hostile input: `new URL` on a
+ * syntactically invalid target, and `decodeURIComponent` on a bad percent escape such
+ * as `/%ZZ`. Neither may ever escape into the process, so failures return null.
+ */
+function safePathname(rawUrl: string | undefined): string | null {
+  let pathname: string;
+  try {
+    pathname = new URL(rawUrl ?? '/', 'http://localhost').pathname;
+  } catch {
+    return null;
+  }
+  try {
+    return decodeURIComponent(pathname);
+  } catch {
+    return null;
+  }
+}
+
+/** Filesystem probing throws on EACCES/ENAMETOOLONG/ELOOP; treat all of it as missing. */
+function isFile(path: string): boolean {
+  try {
+    return existsSync(path) && statSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
 function serveStatic(req: http.IncomingMessage, res: http.ServerResponse): void {
-  const url = new URL(req.url ?? '/', 'http://localhost');
-  let pathname = decodeURIComponent(url.pathname);
-  if (pathname.includes('\0')) {
-    res.writeHead(400).end('bad request');
+  const pathname = safePathname(req.url);
+  if (pathname === null || pathname.includes('\0')) {
+    badRequest(res);
     return;
   }
   if (pathname === '/healthz') {
@@ -73,38 +108,65 @@ function serveStatic(req: http.IncomingMessage, res: http.ServerResponse): void 
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }).end(body);
     return;
   }
-  if (pathname === '/') pathname = '/index.html';
-  const safe = normalize(pathname).replace(/^(\.\.[/\\])+/, '');
+  const target = pathname === '/' ? '/index.html' : pathname;
+  const safe = normalize(target).replace(/^(\.\.[/\\])+/, '');
+  const root = STATIC_DIR.endsWith(sep) ? STATIC_DIR : STATIC_DIR + sep;
   let file = join(STATIC_DIR, safe);
-  if (!file.startsWith(STATIC_DIR)) {
-    res.writeHead(403).end('forbidden');
+  if (file !== STATIC_DIR && !file.startsWith(root)) {
+    res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' }).end('forbidden');
     return;
   }
-  if (!existsSync(file) || statSync(file).isDirectory()) {
-    if (extname(safe) === '') {
-      file = join(STATIC_DIR, 'index.html');
-    }
+  if (!isFile(file) && extname(safe) === '') {
+    file = join(STATIC_DIR, 'index.html');
   }
-  if (!existsSync(file)) {
+  if (!isFile(file)) {
     res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end('not found');
     return;
   }
   const ext = extname(file);
-  const immutable = pathname.startsWith('/assets/');
-  res.writeHead(200, {
-    'content-type': MIME[ext] ?? 'application/octet-stream',
-    'cache-control': immutable ? 'public, max-age=31536000, immutable' : 'no-cache',
-    ...SECURITY_HEADERS
+  const immutable = target.startsWith('/assets/');
+  const stream = createReadStream(file);
+  stream.once('open', () => {
+    res.writeHead(200, {
+      'content-type': MIME[ext] ?? 'application/octet-stream',
+      'cache-control': immutable ? 'public, max-age=31536000, immutable' : 'no-cache',
+      ...SECURITY_HEADERS
+    });
+    res.on('close', () => stream.destroy());
+    stream.pipe(res);
   });
-  createReadStream(file).pipe(res);
+  // A read error arrives as an emitted event; without a listener it would take the
+  // whole public server process down.
+  stream.once('error', () => {
+    if (!res.headersSent) {
+      res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end('not found');
+    } else {
+      res.destroy();
+    }
+  });
 }
 
 const httpServer = http.createServer((req, res) => {
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    res.writeHead(405, { allow: 'GET, HEAD' }).end('method not allowed');
-    return;
+  // Belt and braces: no single request may ever take the public process down.
+  try {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      res.writeHead(405, { allow: 'GET, HEAD' }).end('method not allowed');
+      return;
+    }
+    serveStatic(req, res);
+  } catch {
+    if (res.headersSent) res.destroy();
+    else res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' }).end('server error');
   }
-  serveStatic(req, res);
+});
+
+// Malformed request lines surface here; answer and keep serving instead of dying.
+httpServer.on('clientError', (_err, socket) => {
+  if (socket.writable && !socket.destroyed) {
+    socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n');
+  } else {
+    socket.destroy();
+  }
 });
 
 const wss = new WebSocketServer({ noServer: true, maxPayload: 4096 });
@@ -207,6 +269,9 @@ function handle(ws: WebSocket, conn: Conn, msg: ClientMessage): void {
       }
       attach(ws, conn, room, seat.side, seat.token);
       broadcast(room.code, { t: 'event', kind: 'connect', side: seat.side });
+      // Both seats are present and the freeze was automatic: tell both clients the
+      // rally is live again instead of leaving them parked on a frozen screen.
+      if (seat.resumed) broadcast(room.code, { t: 'event', kind: 'resumed' });
       broadcast(room.code, { t: 'state', ...room.snapshot(Date.now()) });
       return;
     }
@@ -225,7 +290,7 @@ function handle(ws: WebSocket, conn: Conn, msg: ClientMessage): void {
       const room = conn.room ? manager.get(conn.room) : undefined;
       if (!room || conn.side === null) return;
       const want = msg.t === 'pause';
-      if (room.setPaused(want, conn.side)) {
+      if (room.setPaused(want, conn.side, msg.t === 'pause' && msg.auto)) {
         broadcast(room.code, { t: 'event', kind: want ? 'paused' : 'resumed' });
         broadcast(room.code, { t: 'state', ...room.snapshot(Date.now()) });
       }
@@ -254,87 +319,100 @@ function handle(ws: WebSocket, conn: Conn, msg: ClientMessage): void {
   }
 }
 
+function registerConnection(ws: WebSocket): void {
+  const conn: Conn = {
+    room: null,
+    side: null,
+    token: null,
+    limiter: new RateLimiter(90, 45),
+    alive: true,
+    lastSeq: -1
+  };
+  conns.set(ws, conn);
+  ws.on('message', (data) => {
+    const now = Date.now();
+    const limit = conn.limiter.take(now);
+    if (!limit.allowed) {
+      send(ws, { t: 'error', code: 'RATE_LIMITED', message: 'Slow down.' });
+      return;
+    }
+    const msg = parseClientMessage(data.toString());
+    if (!msg) {
+      send(ws, { t: 'error', code: 'BAD_MESSAGE', message: 'Malformed message.' });
+      return;
+    }
+    try {
+      handle(ws, conn, msg);
+    } catch {
+      send(ws, { t: 'error', code: 'BAD_MESSAGE', message: 'Message could not be processed.' });
+    }
+  });
+  ws.on('pong', () => {
+    conn.alive = true;
+  });
+  ws.on('close', () => {
+    detach(ws);
+    conns.delete(ws);
+  });
+  ws.on('error', () => {
+    detach(ws);
+    conns.delete(ws);
+  });
+}
+
 httpServer.on('upgrade', (req, socket, head) => {
-  const url = new URL(req.url ?? '/', 'http://localhost');
-  if (url.pathname !== '/ws') {
+  // Hostile targets must not throw here either: an uncaught error in this handler
+  // would take the public server down just like the static path did.
+  if (safePathname(req.url) !== '/ws') {
     socket.destroy();
     return;
   }
-  wss.handleUpgrade(req, socket, head, (ws) => {
-    const conn: Conn = {
-      room: null,
-      side: null,
-      token: null,
-      limiter: new RateLimiter(90, 45),
-      alive: true,
-      lastSeq: -1
-    };
-    conns.set(ws, conn);
-    ws.on('message', (data) => {
-      const now = Date.now();
-      const limit = conn.limiter.take(now);
-      if (!limit.allowed) {
-        send(ws, { t: 'error', code: 'RATE_LIMITED', message: 'Slow down.' });
-        return;
-      }
-      const msg = parseClientMessage(data.toString());
-      if (!msg) {
-        send(ws, { t: 'error', code: 'BAD_MESSAGE', message: 'Malformed message.' });
-        return;
-      }
-      try {
-        handle(ws, conn, msg);
-      } catch {
-        send(ws, { t: 'error', code: 'BAD_MESSAGE', message: 'Message could not be processed.' });
-      }
-    });
-    ws.on('pong', () => {
-      conn.alive = true;
-    });
-    ws.on('close', () => {
-      detach(ws);
-      conns.delete(ws);
-    });
-    ws.on('error', () => {
-      detach(ws);
-      conns.delete(ws);
-    });
-  });
+  try {
+    wss.handleUpgrade(req, socket, head, registerConnection);
+  } catch {
+    socket.destroy();
+  }
 });
 
 let last = Date.now();
 const loop = setInterval(() => {
-  const now = Date.now();
-  const dt = Math.min((now - last) / 1000, 0.25);
-  last = now;
-  for (const room of manager.list()) {
-    const { events, snapshots } = room.advance(dt);
-    for (const e of events) broadcast(room.code, { t: 'event', kind: e.kind, side: e.side, score: e.score });
-    if (snapshots || events.length > 0) {
-      broadcast(room.code, { t: 'state', ...room.snapshot(now) });
+  try {
+    const now = Date.now();
+    const dt = Math.min((now - last) / 1000, 0.25);
+    last = now;
+    for (const room of manager.list()) {
+      const { events, snapshots } = room.advance(dt);
+      for (const e of events) broadcast(room.code, { t: 'event', kind: e.kind, side: e.side, score: e.score });
+      if (snapshots || events.length > 0) {
+        broadcast(room.code, { t: 'state', ...room.snapshot(now) });
+      }
     }
+  } catch (err) {
+    console.error(JSON.stringify({ msg: 'room tick failed', error: String(err) }));
   }
 }, TICK_MS);
 
 const sweep = setInterval(() => {
-  const removed = manager.sweep();
-  for (const code of removed) {
-    const [a, b] = socketsFor(code);
-    if (a) send(a, { t: 'event', kind: 'expired' });
-    if (b) send(b, { t: 'event', kind: 'expired' });
-    roomSockets.delete(code);
-  }
-  const cutoff = Date.now() - 45_000;
-  for (const [ws, conn] of conns) {
-    if (!conn.alive) {
-      ws.terminate();
-      conns.delete(ws);
-      continue;
+  try {
+    const removed = manager.sweep();
+    for (const code of removed) {
+      const [a, b] = socketsFor(code);
+      if (a) send(a, { t: 'event', kind: 'expired' });
+      if (b) send(b, { t: 'event', kind: 'expired' });
+      roomSockets.delete(code);
     }
-    conn.alive = false;
-    if (ws.readyState === 1) ws.ping();
+    for (const [ws, conn] of conns) {
+      if (!conn.alive) {
+        ws.terminate();
+        conns.delete(ws);
+        continue;
+      }
+      conn.alive = false;
+      if (ws.readyState === 1) ws.ping();
+    }
+  } catch (err) {
+    console.error(JSON.stringify({ msg: 'room sweep failed', error: String(err) }));
   }
-  void cutoff;
 }, 10_000);
 
 function shutdown(): void {

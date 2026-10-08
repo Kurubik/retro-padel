@@ -323,6 +323,24 @@ async function main() {
     record('link: both clients agree on the score', JSON.stringify(hostScore) === JSON.stringify(guestScore), JSON.stringify({ hostScore, guestScore }));
     await shot(host, '1440x900-link-match');
 
+    // A dropped seat auto-pauses the rally, so a reclaim has to lift that freeze on
+    // its own: both clients must come back to live play with nobody pressing resume.
+    // Online serves are gated, so a rally only exists once a side has served.
+    const prePhase = await (async () => {
+      const deadline = Date.now() + 30000;
+      let seen = null;
+      while (Date.now() < deadline) {
+        seen = await host.evaluate(() => window.__RP.linkState()?.phase ?? null);
+        if (seen === 'rally') return 'rally';
+        if (seen === 'countdown' || seen === 'lobby') {
+          for (const page of [host, guest]) await page.keyboard.press('Enter');
+        }
+        await sleep(120);
+      }
+      return seen;
+    })();
+    record('link: a live rally runs before the seat drops', prePhase === 'rally', String(prePhase));
+
     // refresh / reclaim
     await guest.reload({ waitUntil: 'domcontentloaded' });
     await guest.waitForFunction(() => Boolean(window.__RP), { timeout: 15000 });
@@ -338,6 +356,37 @@ async function main() {
     record('link: refresh reclaims the same seat with the stored token', reclaimed?.code === code && reclaimed?.side === 1, JSON.stringify(reclaimed));
     await sleep(600);
     await shot(guest, '1440x900-reconnect');
+
+    // The frozen state is the only one that must never persist: a resumed rally may
+    // legitimately move on to point/countdown, so require that live play was observed
+    // at least once and that neither client was left parked.
+    const observed = { sawRally: false, hostPhase: null, guestPhase: null, hostScreen: null, guestScreen: null };
+    const deadline = Date.now() + 25000;
+    while (Date.now() < deadline) {
+      observed.hostPhase = await host.evaluate(() => window.__RP.linkState()?.phase ?? null);
+      observed.guestPhase = await guest.evaluate(() => window.__RP.linkState()?.phase ?? null);
+      observed.hostScreen = await host.evaluate(() => window.__RP.screenName());
+      observed.guestScreen = await guest.evaluate(() => window.__RP.screenName());
+      // Serves are gated, so the resumed match needs a serve press to reach a rally.
+      if (observed.hostPhase === 'countdown' || observed.hostPhase === 'lobby') {
+        for (const page of [host, guest]) await page.keyboard.press('Enter');
+      }
+      if (observed.hostPhase === 'rally' && observed.guestPhase === 'rally') observed.sawRally = true;
+      const live = observed.hostPhase !== 'paused' && observed.guestPhase !== 'paused';
+      const playing = observed.hostScreen === 'playing' && observed.guestScreen === 'playing';
+      if (observed.sawRally && live && playing) break;
+      await sleep(120);
+    }
+    record(
+      'link: reconnect never leaves the match frozen',
+      observed.sawRally &&
+        observed.hostPhase !== 'paused' &&
+        observed.guestPhase !== 'paused' &&
+        observed.hostScreen === 'playing' &&
+        observed.guestScreen === 'playing',
+      JSON.stringify({ prePhase, ...observed })
+    );
+    await shot(host, '1440x900-link-resumed');
 
     const linkOk = linkErrors.length === 0 && guestErrors.length === 0;
     record('link consoles stay clean', linkOk, [...linkErrors, ...guestErrors].slice(0, 3).join(' | '));

@@ -18,11 +18,11 @@ npm run test:browser              # headless Chrome acceptance run (writes artif
 | Gate | Result |
 | --- | --- |
 | `tsc --noEmit` (strict) | clean |
-| Vitest | **35 / 35 passing** across 5 files |
+| Vitest | **58 / 58 passing** across 7 files |
 | Production build | client `dist/` + server `dist-server/index.js` |
-| Browser acceptance | **25 / 25 checks passing** |
+| Browser acceptance | **27 / 27 checks passing** |
 
-### Unit and protocol coverage (`tests/`)
+### Unit, protocol and HTTP coverage (`tests/`)
 
 - **Physics** — no tunnelling at maximum ball velocity, wall bounces keep the ball in the field,
   paddle-corner bounce stays inside the speed cap, speed growth is capped over a 20 000-step volley,
@@ -38,6 +38,16 @@ npm run test:browser              # headless Chrome acceptance run (writes artif
   players, token-bucket rate limiting, room cap, idle sweep.
 - **Wire protocol** — version tag, well-formed frames, hostile value clamping, malformed / oversized /
   unknown frame rejection, identifier truncation.
+- **Online lifecycle** (`tests/protocol/review-regressions.test.ts`) — sub-step intervals are accumulated
+  rather than dropped, banked time is discarded while frozen and clamped so a stalled loop cannot
+  fast-forward a rally, an active match is never expired by the idle sweep, an abandoned room still is,
+  an automatic pause lifts on reclaim while a deliberate pause survives it, and a tab-away pause is
+  reported as automatic.
+- **Public HTTP surface** (`tests/integration/http.test.ts`) — this suite spawns the **built production
+  bundle** (`dist-server/index.js`) on an ephemeral port and drives it over real sockets: health and the
+  SPA shell, a malformed percent escape answered with 400 while `/healthz` keeps working afterwards,
+  five hostile escapes, traversal attempts that never reach the source tree, an absurdly long path, and
+  malformed WebSocket upgrade targets. It rebuilds the server bundle first when sources are newer.
 
 ### Browser acceptance (`scripts/browser-tests.mjs`)
 
@@ -56,11 +66,13 @@ Driven with headless Chrome against the built server:
 11. **LINK** — two separate browser contexts join one room over a real WebSocket, play, and score a
     point; both clients agree on the score; a page refresh reclaims the same seat using the stored
     reconnect token.
-12. No console errors on any page.
+12. **LINK reconnect** — a live rally is dropped mid-play, the seat reclaims, and both clients return to
+    a running rally on the `playing` screen without anyone pressing resume.
+13. No console errors on any page.
 
 ## Screenshots
 
-`artifacts/screenshots/` — 21 images at 1440×900, 390×844, 320×640 and 844×390 covering attract,
+`artifacts/screenshots/` — 22 images at 1440×900, 390×844, 320×640 and 844×390 covering attract,
 mode select, settings, how-to, solo rally, local rally, pause, winner, link lobby (host and both
 players), live link match and reconnect.
 

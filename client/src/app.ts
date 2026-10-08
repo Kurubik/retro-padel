@@ -86,6 +86,8 @@ export class App {
 
   private resizeObserver: ResizeObserver | null = null;
   private overTimer: number | null = null;
+  /** True while the current pause came from the tab going away rather than a player. */
+  private autoPaused = false;
   private accumulator = 0;
   private lastTs = 0;
   private fps = 60;
@@ -132,7 +134,13 @@ export class App {
     const fonts = (document as Document & { fonts?: FontFaceSet }).fonts;
     fonts?.ready.then(() => this.resize()).catch(() => undefined);
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) this.pauseOrBack();
+      if (document.hidden) {
+        // Losing the tab is not a decision by the player, so online it is reported as
+        // an automatic pause and lifted again on return.
+        this.pauseOrBack(this.mode === 'link');
+      } else if (this.autoPaused) {
+        this.resume();
+      }
     });
     this.renderScreen();
     this.lastTs = performance.now();
@@ -361,16 +369,22 @@ export class App {
     }
   }
 
-  private pauseOrBack(): void {
+  /**
+   * `automatic` marks a pause the player did not ask for (tab went away). The server
+   * lifts those by itself once play can continue; a deliberate pause stays put.
+   */
+  private pauseOrBack(automatic = false): void {
     if (this.screen === 'playing') {
       this.audio.back();
-      if (this.mode === 'link') this.link?.send({ t: 'pause' });
+      if (this.mode === 'link') this.link?.send({ t: 'pause', auto: automatic });
       this.changeScreen('paused');
       this.menuIndex = 0;
+      this.autoPaused = automatic;
     }
   }
 
   private resume(): void {
+    this.autoPaused = false;
     if (this.mode === 'link') this.link?.send({ t: 'resume' });
     this.changeScreen('playing');
   }

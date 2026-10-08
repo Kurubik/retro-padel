@@ -20,7 +20,8 @@ export type ClientMessage =
   | { t: 'join'; code: string }
   | { t: 'reclaim'; code: string; token: string }
   | { t: 'input'; seq: number; dir: number; serve: boolean }
-  | { t: 'pause' }
+  /** `auto` marks a freeze the player did not ask for (hidden tab, dropped seat). */
+  | { t: 'pause'; auto: boolean }
   | { t: 'resume' }
   | { t: 'rematch' }
   | { t: 'leave' }
@@ -96,7 +97,7 @@ export function parseClientMessage(raw: string): ClientMessage | null {
       return { t: 'input', seq, dir: Math.max(-1, Math.min(1, m.dir)), serve: m.serve === true };
     }
     case 'pause':
-      return { t: 'pause' };
+      return { t: 'pause', auto: m.auto === true };
     case 'resume':
       return { t: 'resume' };
     case 'rematch':
