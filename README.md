@@ -90,6 +90,10 @@ structural black bezel with clipped 45° micro-corners inside a deeply rounded c
 copper trace, an ultraviolet anodised D-pad and face buttons, a diagonal light pipe, a CSS/SVG
 speaker grille and chartreuse phosphor CRT.
 
+**BLACKWALL / REDLINE** is the optional red-and-black console skin: graphite shell, crimson CRT,
+red-lit controls, warning-stripe detail and a matching Canvas playfield. Switch it under
+**SETTINGS → THEME**; the choice persists locally and SIGNAL/09 remains the default.
+
 | Role | Token |
 | --- | --- |
 | Page void | `#080910` |
@@ -107,7 +111,7 @@ telemetry. Fonts are bundled at build time — there is no runtime font CDN and 
 any kind.
 
 Motion: a 660 ms power-on sweep, phosphor impact pings, LED state for serve/link, 90 ms button travel
-and pointer-reactive stage lighting. The **settings screen** toggles sound, motion and contrast; the
+and pointer-reactive stage lighting. The **settings screen** toggles theme, sound, motion and contrast; the
 motion toggle and `prefers-reduced-motion` switch off the sweep, trail and pulses without touching
 gameplay feedback, and contrast follows `prefers-contrast: more`.
 
@@ -118,7 +122,7 @@ Sound is synthesised locally with Web Audio, is **off until enabled** and never 
 - Real DOM menus with `role="listbox"`, `aria-selected`, focus-visible outlines and buttons that are
   genuinely clickable — no dead controls, and nothing decorative pretends to be interactive.
 - Every state is reachable from the keyboard alone; the device legends carry navigation.
-- Dark ink on phosphor is high contrast; the `HIGH` contrast setting tightens it further.
+- Screen text remains high contrast in both themes; the `HIGH` contrast setting tightens it further.
 - `aria-live` status text on the stage, and reduced-motion is respected by default.
 
 ## Scope

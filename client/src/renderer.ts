@@ -1,5 +1,6 @@
 import { BALL_R, FIELD_H, FIELD_W, PADDLE_H, PADDLE_W, paddleCenterX } from '@shared/core/constants.js';
 import type { BallState, PaddleState, Side } from '@shared/core/types.js';
+import type { ThemeSetting } from './settings.js';
 
 export interface RenderView {
   ball: BallState;
@@ -31,12 +32,16 @@ interface Ping {
   color: string;
 }
 
-const INK = '22, 36, 27';
+const PALETTES = {
+  signal: { ink: '22, 36, 27', accent: '157, 98, 255', flare: '184, 239, 74' },
+  blackwall: { ink: '255, 229, 224', accent: '255, 62, 70', flare: '17, 9, 12' }
+} as const;
 
 export class FieldRenderer {
   private readonly ctx: CanvasRenderingContext2D;
   private readonly trail: { x: number; y: number }[] = [];
   private readonly pings: Ping[] = [];
+  private palette: { ink: string; accent: string; flare: string } = PALETTES.signal;
   private scale = 1;
   private cssW = 0;
   private cssH = 0;
@@ -46,6 +51,12 @@ export class FieldRenderer {
     const ctx = canvas.getContext('2d', { alpha: true });
     if (!ctx) throw new Error('Canvas 2D is unavailable in this browser.');
     this.ctx = ctx;
+  }
+
+  setTheme(theme: ThemeSetting): void {
+    this.palette = PALETTES[theme];
+    this.clearPings();
+    this.trail.length = 0;
   }
 
   resize(cssWidth: number, cssHeight: number, maxDpr = 2): void {
@@ -58,7 +69,7 @@ export class FieldRenderer {
   }
 
   ping(x: number, y: number, kind: 'paddle' | 'wall' | 'score' | 'serve'): void {
-    const color = kind === 'score' ? '184, 239, 74' : kind === 'serve' ? '157, 98, 255' : '22, 36, 27';
+    const color = kind === 'score' ? this.palette.flare : kind === 'serve' ? this.palette.accent : this.palette.ink;
     this.pings.push({
       x,
       y,
@@ -94,7 +105,7 @@ export class FieldRenderer {
     const py = view.ball.y * 0.012;
     ctx.save();
     ctx.globalAlpha *= view.ambient ? 0.5 : 1;
-    ctx.fillStyle = `rgba(${INK}, 0.55)`;
+    ctx.fillStyle = `rgba(${this.palette.ink}, 0.55)`;
     const step = 56;
     for (let gx = (px % step) - step; gx < FIELD_W + step; gx += step) {
       for (let gy = (py % step) - step; gy < FIELD_H + step; gy += step) {
@@ -106,7 +117,7 @@ export class FieldRenderer {
     // Technical rules: outer frame + centre line.
     ctx.save();
     ctx.globalAlpha = alpha * 0.85;
-    ctx.strokeStyle = `rgba(${INK}, 1)`;
+    ctx.strokeStyle = `rgba(${this.palette.ink}, 1)`;
     ctx.lineWidth = 3;
     ctx.setLineDash([]);
     ctx.strokeRect(14, 14, FIELD_W - 28, FIELD_H - 28);
@@ -149,7 +160,7 @@ export class FieldRenderer {
       const k = (i + 1) / n;
       ctx.save();
       ctx.globalAlpha *= 0.12 * k * k;
-      ctx.fillStyle = `rgba(${INK}, 1)`;
+      ctx.fillStyle = `rgba(${this.palette.ink}, 1)`;
       ctx.beginPath();
       ctx.arc(p.x, p.y, BALL_R * (0.3 + 0.5 * k), 0, Math.PI * 2);
       ctx.fill();
@@ -169,9 +180,9 @@ export class FieldRenderer {
     ctx.transform(1, 0, lean / PADDLE_H, 1, 0, 0);
 
     const serving = view.server === side && view.servePulse > 0;
-    ctx.shadowColor = serving ? 'rgba(157, 98, 255, 0.9)' : 'rgba(22, 36, 27, 0.35)';
+    ctx.shadowColor = serving ? `rgba(${this.palette.accent}, 0.9)` : `rgba(${this.palette.ink}, 0.35)`;
     ctx.shadowBlur = serving ? 26 * view.servePulse : 10;
-    ctx.fillStyle = `rgba(${INK}, 0.94)`;
+    ctx.fillStyle = `rgba(${this.palette.ink}, 0.94)`;
     const r = 12;
     const w = PADDLE_W;
     const h = PADDLE_H;
@@ -190,7 +201,7 @@ export class FieldRenderer {
 
     // UV core stripe: reads as machined anodised inlay.
     ctx.shadowBlur = 0;
-    ctx.fillStyle = serving ? 'rgba(157, 98, 255, 0.95)' : 'rgba(157, 98, 255, 0.6)';
+    ctx.fillStyle = `rgba(${this.palette.accent}, ${serving ? 0.95 : 0.6})`;
     const stripeH = h * 0.42;
     ctx.fillRect(-w * 0.14, -stripeH / 2, w * 0.28, stripeH);
     ctx.restore();
@@ -198,7 +209,7 @@ export class FieldRenderer {
     if (view.localSplit) {
       ctx.save();
       ctx.globalAlpha *= 0.5;
-      ctx.fillStyle = `rgba(${INK}, 1)`;
+      ctx.fillStyle = `rgba(${this.palette.ink}, 1)`;
       ctx.font = '600 40px "IBM Plex Mono", monospace';
       ctx.textAlign = side === 0 ? 'left' : 'right';
       ctx.fillText(side === 0 ? 'P1' : 'P2', side === 0 ? 26 : FIELD_W - 26, FIELD_H - 44);
@@ -213,15 +224,15 @@ export class FieldRenderer {
     const { ctx } = this;
     const b = view.ball;
     ctx.save();
-    ctx.shadowColor = 'rgba(22, 36, 27, 0.55)';
+    ctx.shadowColor = `rgba(${this.palette.ink}, 0.55)`;
     ctx.shadowBlur = 18;
-    ctx.fillStyle = `rgba(${INK}, 1)`;
+    ctx.fillStyle = `rgba(${this.palette.ink}, 1)`;
     ctx.beginPath();
     ctx.arc(b.x, b.y, BALL_R, 0, Math.PI * 2);
     ctx.fill();
     ctx.shadowBlur = 0;
     ctx.globalAlpha *= 0.5;
-    ctx.fillStyle = 'rgba(184, 239, 74, 1)';
+    ctx.fillStyle = `rgba(${this.palette.flare}, 1)`;
     ctx.beginPath();
     ctx.arc(b.x - BALL_R * 0.3, b.y - BALL_R * 0.32, BALL_R * 0.28, 0, Math.PI * 2);
     ctx.fill();
@@ -256,7 +267,7 @@ export class FieldRenderer {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = `600 ${size}px "IBM Plex Mono", monospace`;
-    ctx.fillStyle = `rgba(${INK}, ${view.ambient ? 0.55 : 0.92})`;
+    ctx.fillStyle = `rgba(${this.palette.ink}, ${view.ambient ? 0.55 : 0.92})`;
     const y = 132;
     ctx.fillText(String(view.score[0]), FIELD_W / 2 - 118, y);
     ctx.fillText(String(view.score[1]), FIELD_W / 2 + 118, y);
@@ -270,7 +281,7 @@ export class FieldRenderer {
     // Serve marker.
     if (view.servePulse > 0.02) {
       ctx.globalAlpha *= view.servePulse * 0.9;
-      ctx.fillStyle = 'rgba(157, 98, 255, 1)';
+      ctx.fillStyle = `rgba(${this.palette.accent}, 1)`;
       const sx = view.server === 0 ? FIELD_W / 2 - 118 : FIELD_W / 2 + 118;
       ctx.beginPath();
       ctx.arc(sx, y - 88, 13, 0, Math.PI * 2);

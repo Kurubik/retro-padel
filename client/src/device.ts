@@ -13,6 +13,7 @@ export type Action =
 
 export interface DeviceRefs {
   console: HTMLElement;
+  themeLabel: HTMLElement;
   screen: HTMLElement;
   canvas: HTMLCanvasElement;
   ui: HTMLElement;
@@ -24,6 +25,7 @@ export interface DeviceRefs {
   footMode: HTMLElement;
   footHint: HTMLElement;
   rail: HTMLElement;
+  railThemeLabel: HTMLElement;
   railKv: HTMLElement;
   railMode: HTMLElement;
   railSub: HTMLElement;
@@ -309,6 +311,7 @@ export function buildDevice(mount: HTMLElement): Device {
   return {
     refs: {
       console: consoleEl,
+      themeLabel: subsys,
       screen,
       canvas,
       ui,
@@ -320,6 +323,7 @@ export function buildDevice(mount: HTMLElement): Device {
       footMode,
       footHint,
       rail,
+      railThemeLabel: railEyebrow,
       railKv,
       railMode,
       railSub: railMode,

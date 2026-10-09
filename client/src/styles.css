@@ -1,6 +1,6 @@
 /* RETRO//PADEL — SIGNAL/09 handheld. Original design language. */
 
-@layer tokens, base, device, screen, ui, rail, motion, responsive;
+@layer tokens, base, device, screen, ui, rail, motion, responsive, theme;
 
 @layer tokens {
   :root {
@@ -729,6 +729,8 @@
     white-space: nowrap;
   }
   .row__value[data-on='1'] { background: var(--ink); color: var(--phosphor); }
+  .row[data-id='theme'] { grid-template-columns: minmax(0, 1fr) minmax(0, 31cqw); }
+  .row[data-id='theme'] .row__value { font-size: 4.3cqw; letter-spacing: 0.01em; }
   .sheet__foot { margin-top: 1.8cqh; font-family: var(--f-mono); font-size: 5.2cqw; letter-spacing: 0.1em; opacity: 0.74; }
 
   .prose { align-content: stretch; grid-template-rows: auto minmax(0, 1fr) auto; gap: 0; min-height: 0; }
@@ -982,4 +984,173 @@
     .deck__foot { display: none; }
     .deck__rule { padding-bottom: 8px; }
   }
+}
+
+/* BLACKWALL is a complete second console skin, not a filter over SIGNAL/09. */
+@layer theme {
+  :root[data-theme='blackwall'] {
+    --void: #070607;
+    --void-2: #10080b;
+    --struct: #161316;
+    --struct-2: #23191d;
+    --struct-3: #392126;
+    --ceramic: #f4e7e3;
+    --ceramic-2: #c9b5b2;
+    --ceramic-3: #9c8584;
+    --violet: #5b111b;
+    --uv: #ff4650;
+    --uv-deep: #a61426;
+    --phosphor: #ff424b;
+    --phosphor-dim: #dd3543;
+    --ink: #ffe9e5;
+    --cyan: #ff7f79;
+    --coral: #ff7069;
+    --amber: #ffc09d;
+    --shadow-console:
+      0 1px 0 rgba(255, 188, 179, 0.22) inset,
+      0 -18px 30px -22px rgba(202, 23, 43, 0.55) inset,
+      0 26px 60px -28px rgba(0, 0, 0, 1),
+      0 0 42px -18px rgba(255, 47, 65, 0.45);
+  }
+  :root[data-theme='blackwall'][data-contrast='high'] {
+    --ink: #fff9f7;
+    --phosphor: #ff6570;
+    --ceramic: #fff5f1;
+  }
+
+  [data-theme='blackwall'] .stage__bg {
+    background:
+      radial-gradient(48% 52% at var(--mx) var(--my), rgba(228, 26, 47, 0.23), transparent 76%),
+      linear-gradient(130deg, transparent 0 46%, rgba(192, 29, 45, 0.06) 46% 48%, transparent 48% 100%),
+      linear-gradient(180deg, #14090d, #070607 70%);
+  }
+  [data-theme='blackwall'] .stage__bg::after {
+    background-image:
+      linear-gradient(to right, rgba(255, 48, 67, 0.1) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 48, 67, 0.07) 1px, transparent 1px);
+    background-size: 36px 36px;
+  }
+  [data-theme='blackwall'] .stage__note { color: rgba(255, 208, 205, 0.46); }
+
+  [data-theme='blackwall'] .console {
+    background:
+      linear-gradient(140deg, rgba(255, 85, 92, 0.12), transparent 23%),
+      linear-gradient(160deg, #292024 0%, #151316 32%, #0b0b0d 76%, #28171c 100%);
+    border: 1px solid #603039;
+  }
+  [data-theme='blackwall'] .console::before { border-color: rgba(255, 120, 116, 0.18); }
+  [data-theme='blackwall'] .console::after { border-color: rgba(255, 49, 66, 0.55); }
+  [data-theme='blackwall'] .logo,
+  [data-theme='blackwall'] .deck__brand { color: #f5e8e5; }
+  [data-theme='blackwall'] .console__top .chip,
+  [data-theme='blackwall'] .deck__series,
+  [data-theme='blackwall'] .deck__foot { color: #ef8c8d; }
+  [data-theme='blackwall'] .bezel {
+    background: linear-gradient(180deg, #2f151c, #090809 75%);
+    box-shadow: var(--shadow-plate), 0 0 0 1px rgba(255, 56, 75, 0.35) inset, 0 3px 12px #000;
+  }
+  [data-theme='blackwall'] .bezel__tick { border-color: rgba(255, 92, 99, 0.8); }
+  [data-theme='blackwall'] .pipe {
+    background: linear-gradient(90deg, transparent, #ef263f 30%, #ff9187 92%);
+    box-shadow: 0 0 14px rgba(255, 43, 66, 0.85);
+  }
+  [data-theme='blackwall'] .deck__rule i { background: #ff4150; }
+  [data-theme='blackwall'] .dpad {
+    background: radial-gradient(120% 120% at 32% 26%, #402129, #0c0a0c 62%);
+    box-shadow: 0 0 0 1px rgba(255, 62, 78, 0.45), 0 12px 22px -14px #000;
+  }
+  [data-theme='blackwall'] .dpad::after { background: radial-gradient(90% 90% at 50% 30%, #100b0e, #29171d); }
+  [data-theme='blackwall'] .dpad__key { background: linear-gradient(180deg, #39272c, #101013); }
+  [data-theme='blackwall'] .dpad__hub { box-shadow: 0 0 0 3px rgba(255, 66, 78, 0.25); }
+  [data-theme='blackwall'] .face__btn {
+    color: #fff7f5;
+    background: radial-gradient(120% 120% at 34% 26%, #ff9992, #ee3444 46%, #8c0f21 100%);
+    box-shadow: 0 -6px 12px -6px rgba(255, 255, 255, 0.42) inset, 0 10px 20px -8px rgba(234, 31, 56, 0.65), 0 2px 3px #000;
+  }
+  [data-theme='blackwall'] .mid__btn {
+    background: linear-gradient(180deg, #423039, #1c171a);
+    color: #f8d7d3;
+    box-shadow: 0 0 0 1px rgba(255, 94, 105, 0.28) inset, 0 4px 6px -4px #000;
+  }
+  [data-theme='blackwall'] .speaker {
+    background-image: radial-gradient(circle, rgba(255, 93, 102, 0.52) 0 1.5px, transparent 1.6px);
+  }
+  [data-theme='blackwall'] .led[data-on='1'],
+  [data-theme='blackwall'] .led--link[data-on='1'],
+  [data-theme='blackwall'] .led--serve[data-on='1'] {
+    background: #ff4554;
+    box-shadow: 0 0 10px 1px rgba(255, 50, 69, 0.85);
+  }
+
+  [data-theme='blackwall'] .screen {
+    background:
+      radial-gradient(115% 70% at 50% 22%, rgba(255, 71, 76, 0.65), transparent 76%),
+      linear-gradient(165deg, #791523 0%, #4a0e19 56%, #170a0e 100%);
+    box-shadow: 0 0 0 1px #030203, 0 14px 28px -12px #000 inset, 0 0 34px -7px rgba(255, 44, 65, 0.65);
+  }
+  [data-theme='blackwall'][data-contrast='high'] .screen {
+    box-shadow: 0 0 0 2px #fff5f1, 0 14px 28px -12px #000 inset, 0 0 34px -7px rgba(255, 44, 65, 0.75);
+  }
+  [data-theme='blackwall'] .screen::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    background:
+      linear-gradient(135deg, transparent 0 46%, rgba(255, 32, 56, 0.12) 46% 47%, transparent 47% 100%),
+      repeating-linear-gradient(90deg, transparent 0 29px, rgba(255, 133, 132, 0.035) 29px 30px);
+  }
+  [data-theme='blackwall'] .screen::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 34%;
+    height: 4px;
+    z-index: 6;
+    pointer-events: none;
+    background: repeating-linear-gradient(115deg, #ff5660 0 7px, #21080e 7px 11px);
+    opacity: 0.85;
+  }
+  [data-theme='blackwall'] .screen__crt {
+    background:
+      repeating-linear-gradient(to bottom, rgba(13, 0, 4, 0.24) 0 1px, transparent 1px 3px),
+      radial-gradient(130% 100% at 50% 0%, rgba(255, 165, 152, 0.08), transparent 40%),
+      radial-gradient(150% 130% at 50% 118%, rgba(0, 0, 0, 0.5), transparent 58%);
+  }
+  [data-theme='blackwall'] .screen__sweep {
+    background: linear-gradient(to bottom, transparent, rgba(255, 141, 136, 0.14), transparent);
+  }
+  [data-theme='blackwall'] .screen__bars {
+    color: #fff0ed;
+    background: linear-gradient(to bottom, rgba(26, 1, 8, 0.28), transparent);
+  }
+  [data-theme='blackwall'] .screen__bars--bottom {
+    background: linear-gradient(to top, rgba(26, 1, 8, 0.28), transparent);
+  }
+  [data-theme='blackwall'] #screen-conn[data-state='live'] { color: #ffd6cb; }
+  [data-theme='blackwall'] #screen-conn[data-state='wait'] { color: #ffc09d; }
+  [data-theme='blackwall'] #screen-conn[data-state='down'] { color: #ff8890; }
+
+  [data-theme='blackwall'] .attract__logo { text-shadow: 2px 2px 0 rgba(16, 0, 5, 0.5), -2px 0 0 rgba(255, 70, 80, 0.65); }
+  [data-theme='blackwall'] .attract__press { border-color: #ffe9e5; background: rgba(18, 4, 8, 0.3); }
+  [data-theme='blackwall'] .menu__item,
+  [data-theme='blackwall'] .lobby__player { border-color: rgba(255, 229, 224, 0.35); }
+  [data-theme='blackwall'] .menu__item[aria-selected='true'],
+  [data-theme='blackwall'] .row__value[data-on='1'],
+  [data-theme='blackwall'] .lobby__player[data-ready='1'],
+  [data-theme='blackwall'] .lobby__btn[data-primary='1'] { color: #1c090e; }
+  [data-theme='blackwall'] .menu__item[aria-selected='true'] .menu__note { color: #62121c; }
+  [data-theme='blackwall'] .row { border-bottom-color: rgba(255, 229, 224, 0.35); }
+  [data-theme='blackwall'] .lobby__link { border-color: rgba(255, 229, 224, 0.55); }
+  [data-theme='blackwall'] .banner__plate { background: rgba(100, 14, 27, 0.96); box-shadow: 0 1.2cqh 0 rgba(3, 0, 1, 0.36); }
+  [data-theme='blackwall'] .toast { color: #1c090e; }
+
+  [data-theme='blackwall'] .rail { color: #e6cdcb; }
+  [data-theme='blackwall'] .rail__block { border-color: rgba(255, 66, 80, 0.38); }
+  [data-theme='blackwall'] .rail__text,
+  [data-theme='blackwall'] .rail__kv dt,
+  [data-theme='blackwall'] .rail__keys span { color: rgba(255, 225, 220, 0.58); }
+  [data-theme='blackwall'] .rail__flag i { box-shadow: 0 0 9px rgba(255, 66, 80, 0.85); }
 }

@@ -139,10 +139,29 @@ async function main() {
       return document.getElementById('ui')?.textContent ?? '';
     });
     await sleep(200);
-    record('settings exposes sound, motion and contrast', /SOUND/.test(settingsText) && /MOTION/.test(settingsText) && /CONTRAST/.test(settingsText));
+    record('settings exposes theme, sound, motion and contrast', /THEME/.test(settingsText) && /SOUND/.test(settingsText) && /MOTION/.test(settingsText) && /CONTRAST/.test(settingsText));
     await shot(page, '1440x900-settings');
+    await page.click('[data-id="theme"]');
+    const blackwall = await page.evaluate(() => ({
+      theme: document.documentElement.dataset.theme,
+      value: document.querySelector('[data-id="theme"] .row__value')?.textContent,
+      stored: JSON.parse(localStorage.getItem('rp.settings.v1') ?? '{}').theme
+    }));
+    record('BLACKWALL toggles and persists', blackwall.theme === 'blackwall' && blackwall.value === 'BLACKWALL' && blackwall.stored === 'blackwall');
+    await shot(page, '1440x900-blackwall-settings');
     await page.evaluate(() => window.__RP.setScreen('attract'));
     await sleep(150);
+    await shot(page, '1440x900-blackwall-attract');
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await bootApp(page);
+    record('BLACKWALL survives reload', await page.evaluate(() => document.documentElement.dataset.theme === 'blackwall'));
+    await page.evaluate(() => window.__RP.startSolo('rookie'));
+    await sleep(200);
+    await shot(page, '1440x900-blackwall-rally');
+    await page.evaluate(() => window.__RP.openSettings());
+    await page.click('[data-id="theme"]');
+    record('SIGNAL/09 can be restored', await page.evaluate(() => document.documentElement.dataset.theme === 'signal'));
+    await page.evaluate(() => window.__RP.setScreen('attract'));
 
     // ---- real solo rally driven by keyboard -----------------------------
     await page.evaluate(() => window.__RP.startSolo('rookie'));
@@ -247,8 +266,17 @@ async function main() {
     await phone.evaluate(() => window.__RP.openSettings());
     await sleep(250);
     const phoneSettings = await phone.evaluate(() => document.getElementById('ui')?.textContent ?? '');
-    record('phone settings renders all options', /SOUND/.test(phoneSettings) && /CONTRAST/.test(phoneSettings));
+    record('phone settings renders all options', /THEME/.test(phoneSettings) && /SOUND/.test(phoneSettings) && /CONTRAST/.test(phoneSettings));
     await shot(phone, '390x844-settings');
+
+    await phone.tap('[data-id="theme"]');
+    record('phone: touch switches to BLACKWALL', await phone.evaluate(() => document.documentElement.dataset.theme === 'blackwall'));
+    await shot(phone, '390x844-blackwall-settings');
+    await phone.evaluate(() => window.__RP.setScreen('attract'));
+    await sleep(120);
+    await shot(phone, '390x844-blackwall-attract');
+    await phone.evaluate(() => window.__RP.openSettings());
+    await phone.tap('[data-id="theme"]');
 
     await phone.evaluate(() => window.__RP.setScreen('attract'));
     await sleep(120);

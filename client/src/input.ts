@@ -104,6 +104,8 @@ export class InputHub {
 
   private bindPointer(): void {
     const down = (ev: PointerEvent) => {
+      // Menu buttons live inside the field. Do not steal their pointer capture or click.
+      if (!this.screen.querySelector<HTMLElement>('.ui')?.hidden) return;
       const rect = this.screen.getBoundingClientRect();
       const side: Side = this.ctx.split && ev.clientX - rect.left > rect.width / 2 ? 1 : this.ctx.side;
       const zone: PointerZone = { side, fieldY: this.fieldYFromClient(ev.clientY) };
@@ -127,7 +129,9 @@ export class InputHub {
     this.screen.addEventListener('pointercancel', up);
     this.screen.addEventListener('lostpointercapture', up);
     this.screen.addEventListener('contextmenu', (ev) => ev.preventDefault());
-    this.screen.addEventListener('touchstart', (ev) => ev.preventDefault(), { passive: false });
+    this.screen.addEventListener('touchstart', (ev) => {
+      if (this.screen.querySelector<HTMLElement>('.ui')?.hidden) ev.preventDefault();
+    }, { passive: false });
   }
 
   private bindGamepadHint(): void {

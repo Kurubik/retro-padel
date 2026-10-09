@@ -170,6 +170,9 @@ export class App {
   private setSettings(next: Settings, persist = true): void {
     this.settings = next;
     applySettings(next);
+    this.renderer.setTheme(next.theme);
+    this.device.refs.themeLabel.textContent = next.theme === 'blackwall' ? 'BLACKWALL' : 'SIGNAL/09';
+    this.device.refs.railThemeLabel.textContent = next.theme === 'blackwall' ? 'BLACKWALL // REDLINE' : 'SIGNAL/09 HANDHELD';
     this.audio.setEnabled(next.sound);
     if (persist) saveSettings(next);
   }
@@ -406,6 +409,7 @@ export class App {
 
   private settingRows(): { id: string; label: string; hint?: string; value: string; on?: boolean }[] {
     return [
+      { id: 'theme', label: 'THEME', hint: 'console + playfield', value: this.settings.theme === 'blackwall' ? 'BLACKWALL' : 'SIGNAL/09', on: this.settings.theme === 'blackwall' },
       { id: 'sound', label: 'SOUND', hint: 'web audio, off until enabled', value: this.settings.sound ? 'ON' : 'OFF', on: this.settings.sound },
       { id: 'motion', label: 'MOTION', hint: 'sweep, trail, pulses', value: this.settings.motion === 'reduced' ? 'REDUCED' : 'FULL', on: this.settings.motion === 'full' },
       { id: 'contrast', label: 'CONTRAST', hint: 'ink + shell', value: this.settings.contrast === 'high' ? 'HIGH' : 'STD', on: this.settings.contrast === 'high' },
@@ -414,7 +418,8 @@ export class App {
   }
 
   private adjustSetting(id: string): void {
-    if (id === 'sound') this.setSettings({ ...this.settings, sound: !this.settings.sound });
+    if (id === 'theme') this.setSettings({ ...this.settings, theme: this.settings.theme === 'signal' ? 'blackwall' : 'signal' });
+    else if (id === 'sound') this.setSettings({ ...this.settings, sound: !this.settings.sound });
     else if (id === 'motion') this.setSettings({ ...this.settings, motion: this.settings.motion === 'full' ? 'reduced' : 'full' });
     else if (id === 'contrast') this.setSettings({ ...this.settings, contrast: this.settings.contrast === 'high' ? 'standard' : 'high' });
     else if (id === 'back') return this.back();
@@ -881,7 +886,7 @@ export class App {
     if (this.screen === 'attract') {
       const panel = h('div', 'ui__panel attract');
       const kicker = h('div', 'attract__kicker');
-      kicker.textContent = 'CYBER ARCADE';
+      kicker.textContent = this.settings.theme === 'blackwall' ? 'BLACKWALL // REDLINE' : 'CYBER ARCADE';
       const logo = h('div', 'attract__logo');
       logo.innerHTML = 'RETRO<span class="slash">//</span><br>PADEL';
       const press = h('div', 'attract__press');
@@ -907,7 +912,7 @@ export class App {
         ui,
         {
           title: 'SELECT MODE',
-          sub: 'SIGNAL/09',
+          sub: this.settings.theme === 'blackwall' ? 'BLACKWALL' : 'SIGNAL/09',
           rows: this.modeRows(),
           index: this.menuIndex,
           footLeft: '↑↓ MOVE · ◄► LEVEL',
