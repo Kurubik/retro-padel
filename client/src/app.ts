@@ -410,7 +410,7 @@ export class App {
   private settingRows(): { id: string; label: string; hint?: string; value: string; on?: boolean }[] {
     return [
       { id: 'theme', label: 'THEME', hint: 'console + playfield', value: this.settings.theme === 'blackwall' ? 'BLACKWALL' : 'SIGNAL/09', on: this.settings.theme === 'blackwall' },
-      { id: 'sound', label: 'SOUND', hint: 'web audio, off until enabled', value: this.settings.sound ? 'ON' : 'OFF', on: this.settings.sound },
+      { id: 'sound', label: 'SOUND', hint: 'off by default', value: this.settings.sound ? 'ON' : 'OFF', on: this.settings.sound },
       { id: 'motion', label: 'MOTION', hint: 'sweep, trail, pulses', value: this.settings.motion === 'reduced' ? 'REDUCED' : 'FULL', on: this.settings.motion === 'full' },
       { id: 'contrast', label: 'CONTRAST', hint: 'ink + shell', value: this.settings.contrast === 'high' ? 'HIGH' : 'STD', on: this.settings.contrast === 'high' },
       { id: 'back', label: 'BACK', value: '', on: false }

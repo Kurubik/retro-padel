@@ -688,7 +688,7 @@
   }
 
   .sheet { align-content: stretch; grid-template-rows: auto minmax(0, 1fr) auto; gap: 0; padding-top: 0.4cqh; min-height: 0; }
-  .sheet__body { display: grid; align-content: start; min-height: 0; }
+  .sheet__body { display: grid; grid-auto-rows: max-content; align-content: start; min-height: 0; }
   .sheet__head {
     display: grid;
     grid-template-columns: minmax(0, auto) minmax(0, 1fr);
@@ -705,7 +705,7 @@
     grid-template-columns: minmax(0, 1fr) minmax(0, 26cqw);
     align-items: center;
     gap: 1.6cqw;
-    padding: 1cqh 0;
+    padding: 0.6cqh 0;
     border-bottom: 1px dashed rgba(22, 36, 27, 0.3);
     min-height: 44px;
     text-align: left;
