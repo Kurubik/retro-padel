@@ -132,12 +132,9 @@ async function main() {
     await shot(page, '1440x900-modes');
 
     // settings screen
-    await page.keyboard.press('ArrowDown');
-    await sleep(120);
-    const settingsText = await page.evaluate(() => {
-      window.__RP.openSettings();
-      return document.getElementById('ui')?.textContent ?? '';
-    });
+    await page.click('[data-id="settings"]');
+    record('pointer opens settings from mode menu', await page.evaluate(() => window.__RP.screenName() === 'settings'));
+    const settingsText = await page.evaluate(() => document.getElementById('ui')?.textContent ?? '');
     await sleep(200);
     record('settings exposes theme, sound, motion and contrast', /THEME/.test(settingsText) && /SOUND/.test(settingsText) && /MOTION/.test(settingsText) && /CONTRAST/.test(settingsText));
     await shot(page, '1440x900-settings');

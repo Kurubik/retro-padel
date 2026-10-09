@@ -1152,7 +1152,22 @@ export class App {
   private setIndex(i: number): void {
     if (i === this.menuIndex) return;
     this.menuIndex = i;
-    this.renderScreen();
+    // Pointer hover must not replace a button between pointerdown and click.
+    const items = this.device.refs.ui.querySelectorAll<HTMLElement>('.menu__item, .row');
+    if (!items.length) return this.renderScreen();
+    items.forEach((item, index) => {
+      const selected = index === i;
+      if (item.classList.contains('menu__item')) {
+        item.setAttribute('aria-selected', String(selected));
+        const mark = item.querySelector<HTMLElement>('.menu__mark');
+        if (mark) mark.textContent = selected ? '>' : '';
+      } else {
+        if (selected) item.dataset.selected = '1';
+        else delete item.dataset.selected;
+        const label = item.querySelector<HTMLElement>('.row__label');
+        if (label) label.textContent = (selected ? '> ' : '') + (label.textContent ?? '').replace(/^> /, '');
+      }
+    });
   }
 
   private footLabel(): string {
